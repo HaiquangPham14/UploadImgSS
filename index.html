@@ -24,6 +24,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            position: relative;
         }
 
         h1 {
@@ -38,14 +39,28 @@
             display: flex;
             flex-direction: column;
             flex-grow: 1;
+            align-items: center;
+        }
+
+        #backgroundImageLayer {
+            position: absolute;
+            top: 30vh;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 100%;
+            max-height: 50vh;
+            object-fit: contain;
+            z-index: 1;
         }
 
         #displayImage {
-            max-width: 100%;
+            position: relative;
+            z-index: 2;
+            max-width: 70%;
             height: auto;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            margin: 0 auto;
+            margin: 10vh auto 0 auto;
         }
 
         #error {
@@ -92,8 +107,15 @@
                 top: 5vh;
             }
 
+            #backgroundImageLayer {
+                max-width: 100%;
+                max-height: 40vh;
+                top: 20vh;
+            }
+
             #displayImage {
-                max-width: 90%;
+                max-width: 80%;
+                margin-top: 8vh;
             }
 
             #error {
@@ -104,13 +126,27 @@
             #actionButton img {
                 width: 150px;
             }
+
+            .button-container {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            #actionButton img {
+                width: 120px;
+            }
         }
     </style>
 </head>
 
 <body>
     <h1>Ảnh hiển thị</h1>
-    <div class="image-container">
+    <div class="image-container" style="position:relative;">
+        <!-- Ảnh nằm giữa background và displayImage -->
+        <img id="backgroundImageLayer"
+            src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/ht22.png?alt=media"
+            alt="Ảnh chèn giữa" />
         <img id="displayImage" alt="Ảnh từ URL" />
         <p id="error"></p>
     </div>
@@ -122,15 +158,20 @@
     </div>
 
     <script>
+        function randomFileName() {
+            const letters = Array(3).fill(0).map(() => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');
+            const numbers = Math.floor(1000 + Math.random() * 9000);
+            return `${letters}${numbers}.jpg`;
+        }
+
+        let clickCount = 0;
+
         const urlParams = new URLSearchParams(window.location.search);
         const imageUrl = urlParams.get('imageURL');
         const imgElement = document.getElementById('displayImage');
         const errorElement = document.getElementById('error');
         const actionButton = document.getElementById('actionButton');
         const fileInput = document.getElementById('fileInput');
-        let isDownloadMode = true;
-
-        console.log('imageUrl:', imageUrl);
 
         if (imageUrl) {
             imgElement.src = imageUrl;
@@ -139,41 +180,90 @@
             };
             imgElement.onload = () => {
                 errorElement.textContent = '';
+                imgElement.style.display = ""; // Hiện ảnh khi đổi ảnh
             };
         } else {
             errorElement.textContent = 'Vui lòng cung cấp URL ảnh qua query parameter (ví dụ: ?imageURL=https://example.com/image.jpg)';
         }
 
         actionButton.addEventListener('click', () => {
-            if (isDownloadMode) {
-                if (imageUrl) { // Sử dụng imageUrl trực tiếp
-                    const link = document.createElement('a');
-                    link.href = imageUrl; // Sử dụng imageUrl
-                    link.download = 'image.jpg';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+            if (clickCount === 0) {
+                // Lần nhấn đầu, download ảnh
+                if (imageUrl) {
+                    fetch(imageUrl, { mode: 'cors' })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Không thể tải ảnh về.');
+                            return response.blob();
+                        })
+                        .then(blob => {
+                            const fileName = randomFileName();
+                            const blobUrl = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = blobUrl;
+                            link.download = fileName;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(blobUrl);
+
+                            errorElement.textContent = `Ảnh đã được tải về thành công! (${fileName})`;
+                            errorElement.style.color = '#4CAF50';
+
+                            // Ẩn ảnh sau 3 giây
+                            setTimeout(() => {
+                                imgElement.style.display = 'none';
+                                errorElement.textContent = '';
+                            }, 3000);
+
+                            clickCount = 1; // Chuyển sang lần 2
+                        })
+                        .catch(err => {
+                            errorElement.textContent = 'Không thể tải ảnh về (CORS hoặc lỗi mạng).';
+                            errorElement.style.color = 'red';
+                        });
                 } else {
-                    errorElement.textContent = 'Không có ảnh để tải xuống.';
+                    errorElement.textContent = 'Không có ảnh để tải về!';
+                    errorElement.style.color = 'red';
                 }
             } else {
+                // Lần nhấn thứ 2, cho chọn file
                 fileInput.click();
             }
-            isDownloadMode = !isDownloadMode;
         });
 
         fileInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file && file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    imgElement.src = e.target.result;
-                    errorElement.textContent = '';
-                };
-                reader.readAsDataURL(file);
+
+                const formData = new FormData();
+                formData.append('image', file);
+
+                fetch('https://upimgss.azurewebsites.net/api/SSImage/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(async response => {
+                        if (!response.ok) {
+                            const text = await response.text();
+                            throw new Error(text || 'Upload failed');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        errorElement.textContent = 'Upload ảnh thành công!';
+                        errorElement.style.color = '#4CAF50';
+                        setTimeout(() => { errorElement.textContent = ''; }, 3000);
+                        imgElement.style.display = 'none';
+                    })
+                    .catch(err => {
+                        errorElement.textContent = 'Không upload được ảnh: ' + err.message;
+                        errorElement.style.color = 'red';
+                    });
             } else {
                 errorElement.textContent = 'Vui lòng chọn một file ảnh hợp lệ.';
+                errorElement.style.color = 'red';
             }
+            clickCount = 0;
         });
     </script>
 </body>
