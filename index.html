@@ -23,8 +23,9 @@
             color: white;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            position: relative;
+            justify-content: flex-start;
+            align-items: center;
+            overflow: hidden;
         }
 
         h1 {
@@ -32,16 +33,6 @@
             padding: 20px;
             font-size: 2rem;
         }
-
-        .image-container {
-            position: relative;
-            top: 15vh;
-            display: flex;
-            flex-direction: column;
-            flex-grow: 1;
-            align-items: center;
-        }
-
         #backgroundImageLayer {
             position: absolute;
             top: 30vh;
@@ -52,15 +43,54 @@
             object-fit: contain;
             z-index: 1;
         }
+        .image-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1;
+            width: 100vw;
+            height: 100vh;
+            padding-top: vh;
+            position: relative;
+        }
+
+        .displayImage-wrapper {
+            position: relative;
+            display: inline-block;
+            border-radius: 16px;
+            overflow: hidden;
+            max-width: 70vw;
+            max-height: 70vh;
+            min-width: 200px;
+            min-height: 200px;
+            margin: 0 auto;
+            z-index: 2;
+            transform: scale(0.8);
+            transform-origin: center center;
+        }
+
+        .displayImage-bg {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+            object-fit: contain;
+        }
 
         #displayImage {
-            position: relative;
-            z-index: 2;
-            max-width: 70%;
-            height: auto;
-            border-radius: 8px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 16px;
+            background: transparent;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            margin: 10vh auto 0 auto;
+            z-index: 2;
+            display: block;
+            pointer-events: auto;
         }
 
         #error {
@@ -97,25 +127,30 @@
             display: none;
         }
 
+        @media (max-width: 900px) {
+            .displayImage-wrapper {
+                max-width: 90vw;
+            }
+        }
+
         @media (max-width: 600px) {
             h1 {
                 font-size: 1.5rem;
                 padding: 15px;
             }
-
-            .image-container {
-                top: 5vh;
-            }
-
             #backgroundImageLayer {
                 max-width: 100%;
                 max-height: 40vh;
                 top: 20vh;
             }
+            .image-container {
+                padding-top: 10vh;
+            }
 
-            #displayImage {
-                max-width: 80%;
-                margin-top: 8vh;
+            .displayImage-wrapper {
+                max-width: 96vw;
+                min-width: 120px;
+                min-height: 120px;
             }
 
             #error {
@@ -142,12 +177,18 @@
 
 <body>
     <h1>Ảnh hiển thị</h1>
-    <div class="image-container" style="position:relative;">
-        <!-- Ảnh nằm giữa background và displayImage -->
+    <div class="image-container">
         <img id="backgroundImageLayer"
             src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/ht22.png?alt=media"
             alt="Ảnh chèn giữa" />
-        <img id="displayImage" alt="Ảnh từ URL" />
+        <div class="displayImage-wrapper" id="displayImageWrapper">
+            <!-- Ảnh nền background cố định (dùng làm khung tham chiếu kích thước) -->
+            <img class="displayImage-bg" id="displayImageBg"
+                src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/22.png?alt=media"
+                alt="Nền khung" />
+            <!-- Ảnh URL sẽ phủ lên, lấy kích thước dựa theo ảnh nền phía dưới -->
+            <img id="displayImage" alt="Ảnh từ URL" />
+        </div>
         <p id="error"></p>
     </div>
     <div class="button-container">
@@ -172,11 +213,32 @@
         const errorElement = document.getElementById('error');
         const actionButton = document.getElementById('actionButton');
         const fileInput = document.getElementById('fileInput');
+        const displayImageBg = document.getElementById('displayImageBg');
+        const displayImageWrapper = document.getElementById('displayImageWrapper');
+
+        // Khi ảnh nền load xong, set lại kích thước wrapper (nếu muốn chuẩn pixel)
+        displayImageBg.onload = function () {
+            // Lấy kích thước thật của ảnh nền
+            const wrapperWidth = displayImageBg.clientWidth;
+            const wrapperHeight = displayImageBg.clientHeight;
+            // Đặt kích thước wrapper đúng theo kích thước nền
+            displayImageWrapper.style.width = wrapperWidth + 'px';
+            displayImageWrapper.style.height = wrapperHeight + 'px';
+            // Ảnh URL sẽ phủ lên đúng khung
+            imgElement.style.width = "100%";
+            imgElement.style.height = "100%";
+        };
+
+        // Nếu ảnh nền đã load sẵn (cache), vẫn phải set lại kích thước
+        if (displayImageBg.complete) {
+            displayImageBg.onload();
+        }
 
         if (imageUrl) {
             imgElement.src = imageUrl;
             imgElement.onerror = () => {
                 errorElement.textContent = 'Không thể tải ảnh từ URL cung cấp. Kiểm tra URL hoặc CORS.';
+                imgElement.style.display = "none";
             };
             imgElement.onload = () => {
                 errorElement.textContent = '';
