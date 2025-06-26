@@ -68,31 +68,32 @@
             min-height: 200px;
             margin: 0 auto;
             z-index: 2;
-            transform: scale(0.8);
+            transform: scale(0.9);
             transform-origin: center center;
+            background: transparent;
         }
 
         .displayImage-bg {
             display: block;
             width: 100%;
-            height: auto;
+            height: 100%;
             border-radius: 16px;
-            object-fit: contain;
+            object-fit: fill;
         }
 
         #displayImage {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+            /* width, height, and transform will be handled via JS for zoom/move */
             border-radius: 16px;
             background: transparent;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            /*box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);*/
             z-index: 2;
             display: block;
             pointer-events: auto;
+            cursor: grab;
+            user-select: none;
         }
 
         #error {
@@ -187,7 +188,7 @@
             alt="Ảnh chèn giữa" />
         <div class="displayImage-wrapper" id="displayImageWrapper">
             <img class="displayImage-bg" id="displayImageBg"
-                src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/22.png?alt=media"
+                src="https://cdn.jsdelivr.net/gh/HaiquangPham14/UploadImgSS@main/SCENE%204.png"
                 alt="Nền khung" />
             <img id="displayImage" alt="Ảnh từ URL" />
         </div>
@@ -218,24 +219,46 @@
         const displayImageBg = document.getElementById('displayImageBg');
         const displayImageWrapper = document.getElementById('displayImageWrapper');
 
+        // State for zoom and translation
+        let imgScale = 1;
+        let imgTranslate = { x: 0, y: 0 };
+
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let imgStart = { x: 0, y: 0 };
+
         let wrapperWidth = 0;
         let wrapperHeight = 0;
+        let naturalImgWidth = 0, naturalImgHeight = 0;
 
         displayImageBg.onload = function () {
             wrapperWidth = displayImageBg.clientWidth;
             wrapperHeight = displayImageBg.clientHeight;
             displayImageWrapper.style.width = wrapperWidth + 'px';
             displayImageWrapper.style.height = wrapperHeight + 'px';
-            imgElement.style.width = "100%";
-            imgElement.style.height = "100%";
+            updateDisplayImageTransform();
         };
 
         if (displayImageBg.complete) {
             displayImageBg.onload();
         }
 
-        if (imageUrl) {
-            imgElement.src = imageUrl;
+        function updateDisplayImageTransform() {
+            imgElement.style.transform = `translate(${imgTranslate.x}px, ${imgTranslate.y}px) scale(${imgScale})`;
+            imgElement.style.width = "100%";
+            imgElement.style.height = "100%";
+            imgElement.style.objectFit = "contain";
+        }
+
+        function resetImageTransform() {
+            imgScale = 1;
+            imgTranslate = { x: 0, y: 0 };
+            updateDisplayImageTransform();
+        }
+
+        // Load image and set up initial state
+        function setImageUrl(src) {
+            imgElement.src = src;
             imgElement.onerror = () => {
                 errorElement.textContent = 'Không thể tải ảnh từ URL cung cấp. Kiểm tra URL hoặc CORS.';
                 imgElement.style.display = "none";
@@ -243,11 +266,105 @@
             imgElement.onload = () => {
                 errorElement.textContent = '';
                 imgElement.style.display = "";
+                naturalImgWidth = imgElement.naturalWidth;
+                naturalImgHeight = imgElement.naturalHeight;
+                resetImageTransform();
             };
+        }
+
+        if (imageUrl) {
+            setImageUrl(imageUrl);
         } else {
             errorElement.textContent = 'Vui lòng cung cấp URL ảnh qua query parameter (ví dụ: ?imageURL=https://example.com/image.jpg)';
         }
 
+        // Mouse/Touch drag for move
+        imgElement.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            imgElement.style.cursor = 'grabbing';
+            dragStart.x = e.clientX;
+            dragStart.y = e.clientY;
+            imgStart.x = imgTranslate.x;
+            imgStart.y = imgTranslate.y;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - dragStart.x;
+            const dy = e.clientY - dragStart.y;
+            imgTranslate.x = imgStart.x + dx;
+            imgTranslate.y = imgStart.y + dy;
+            updateDisplayImageTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                imgElement.style.cursor = 'grab';
+            }
+        });
+
+        // Touch events
+        imgElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                dragStart.x = e.touches[0].clientX;
+                dragStart.y = e.touches[0].clientY;
+                imgStart.x = imgTranslate.x;
+                imgStart.y = imgTranslate.y;
+                imgElement.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                const dx = e.touches[0].clientX - dragStart.x;
+                const dy = e.touches[0].clientY - dragStart.y;
+                imgTranslate.x = imgStart.x + dx;
+                imgTranslate.y = imgStart.y + dy;
+                updateDisplayImageTransform();
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                imgElement.style.cursor = 'grab';
+            }
+        });
+
+        // Wheel for zoom
+        imgElement.addEventListener('wheel', function (e) {
+            if (!imgElement.src) return;
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? 1.1 : 0.9;
+            const prevScale = imgScale;
+            imgScale = Math.max(0.2, Math.min(imgScale * delta, 8)); // Clamp zoom
+            // To zoom towards pointer, adjust translate as well:
+            const rect = imgElement.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+            imgTranslate.x = (imgTranslate.x - cx) * (imgScale / prevScale) + cx;
+            imgTranslate.y = (imgTranslate.y - cy) * (imgScale / prevScale) + cy;
+            updateDisplayImageTransform();
+        }, { passive: false });
+
+        // Keyboard shortcuts for zoom
+        window.addEventListener("keydown", function (e) {
+            if (!imgElement.src) return;
+            if (e.key === "+" || e.key === "=") {
+                imgScale = Math.min(imgScale * 1.2, 8);
+                updateDisplayImageTransform();
+            } else if (e.key === "-" || e.key === "_") {
+                imgScale = Math.max(imgScale / 1.2, 0.2);
+                updateDisplayImageTransform();
+            } else if (e.key === "0") {
+                resetImageTransform();
+            }
+        });
+
+        // Main action button - download or upload
         actionButton.addEventListener('click', async () => {
             if (clickCount === 0) {
                 if (imageUrl) {
@@ -269,7 +386,45 @@
                         const ctx = canvas.getContext('2d');
 
                         drawImageContain(ctx, bgImg, width, height, 16);
-                        drawImageContain(ctx, overImg, width, height, 16);
+
+                        // Draw overlay image with current zoom/translate
+                        // Calculate how the overlay should be transformed
+                        // The overlay is drawn as object-fit: contain
+                        const frameRatio = width / height;
+                        const imgRatio = overImg.naturalWidth / overImg.naturalHeight;
+                        let drawW, drawH, offX, offY;
+                        if (imgRatio > frameRatio) {
+                            drawW = width;
+                            drawH = width / imgRatio;
+                            offX = 0;
+                            offY = (height - drawH) / 2;
+                        } else {
+                            drawH = height;
+                            drawW = height * imgRatio;
+                            offX = (width - drawW) / 2;
+                            offY = 0;
+                        }
+                        // Apply user zoom and move
+                        // imgScale and imgTranslate are relative to preview box, so scale to canvas
+                        const scaleW = drawW * imgScale;
+                        const scaleH = drawH * imgScale;
+
+                        // imgTranslate is in preview px, so map to canvas px
+                        // wrapperWidth: preview px, width: canvas px
+                        const translateX = offX + imgTranslate.x * (width / wrapperWidth);
+                        const translateY = offY + imgTranslate.y * (height / wrapperHeight);
+
+                        ctx.save();
+                        roundedRect(ctx, 0, 0, width, height, 16);
+                        ctx.clip();
+                        ctx.drawImage(
+                            overImg,
+                            translateX + (drawW - scaleW) / 2,
+                            translateY + (drawH - scaleH) / 2,
+                            scaleW,
+                            scaleH
+                        );
+                        ctx.restore();
 
                         canvas.toBlob(blob => {
                             const fileName = randomFileName();
