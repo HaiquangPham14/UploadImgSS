@@ -85,10 +85,8 @@
             position: absolute;
             top: 0;
             left: 0;
-            /* width, height, and transform will be handled via JS for zoom/move */
             border-radius: 16px;
             background: transparent;
-            /*box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);*/
             z-index: 2;
             display: block;
             pointer-events: auto;
@@ -227,6 +225,13 @@
         let dragStart = { x: 0, y: 0 };
         let imgStart = { x: 0, y: 0 };
 
+        // Pinch zoom state
+        let pinchZoomStart = false;
+        let pinchStartDist = 0;
+        let pinchStartScale = 1;
+        let pinchMidStart = { x: 0, y: 0 };
+        let pinchStartTranslate = { x: 0, y: 0 };
+
         let wrapperWidth = 0;
         let wrapperHeight = 0;
         let naturalImgWidth = 0, naturalImgHeight = 0;
@@ -305,7 +310,7 @@
             }
         });
 
-        // Touch events
+        // Touch events for drag and pinch-zoom
         imgElement.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 isDragging = true;
@@ -314,25 +319,71 @@
                 imgStart.x = imgTranslate.x;
                 imgStart.y = imgTranslate.y;
                 imgElement.style.cursor = 'grabbing';
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                pinchZoomStart = true;
+                pinchStartDist = getTouchDist(e.touches[0], e.touches[1]);
+                pinchStartScale = imgScale;
+                pinchStartTranslate.x = imgTranslate.x;
+                pinchStartTranslate.y = imgTranslate.y;
+                pinchMidStart = getTouchMidpoint(e.touches[0], e.touches[1]);
             }
         });
 
         window.addEventListener('touchmove', (e) => {
-            if (isDragging && e.touches.length === 1) {
+            if (pinchZoomStart && e.touches.length === 2) {
+                e.preventDefault();
+                const newDist = getTouchDist(e.touches[0], e.touches[1]);
+                let scale = pinchStartScale * (newDist / pinchStartDist);
+                scale = Math.max(0.2, Math.min(scale, 8));
+                // Calculate pinch-zoom center in image coordinates
+                const newMid = getTouchMidpoint(e.touches[0], e.touches[1]);
+                // Calculate translate to zoom to pinch center
+                // All coords relative to wrapper
+                const deltaMidX = newMid.x - pinchMidStart.x;
+                const deltaMidY = newMid.y - pinchMidStart.y;
+                // Apply pan movement as well as scaling
+                imgTranslate.x = pinchStartTranslate.x + deltaMidX;
+                imgTranslate.y = pinchStartTranslate.y + deltaMidY;
+                // Zoom towards pinch center
+                const scaleDelta = scale / imgScale;
+                const cx = newMid.x - displayImageWrapper.getBoundingClientRect().left;
+                const cy = newMid.y - displayImageWrapper.getBoundingClientRect().top;
+                imgTranslate.x = (imgTranslate.x - cx) * scaleDelta + cx;
+                imgTranslate.y = (imgTranslate.y - cy) * scaleDelta + cy;
+                imgScale = scale;
+                updateDisplayImageTransform();
+            } else if (isDragging && e.touches.length === 1) {
                 const dx = e.touches[0].clientX - dragStart.x;
                 const dy = e.touches[0].clientY - dragStart.y;
                 imgTranslate.x = imgStart.x + dx;
                 imgTranslate.y = imgStart.y + dy;
                 updateDisplayImageTransform();
             }
-        });
+        }, { passive: false });
 
         window.addEventListener('touchend', (e) => {
-            if (isDragging) {
+            if (pinchZoomStart && e.touches.length < 2) {
+                pinchZoomStart = false;
+            }
+            if (isDragging && e.touches.length === 0) {
                 isDragging = false;
                 imgElement.style.cursor = 'grab';
             }
         });
+
+        function getTouchDist(touch1, touch2) {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getTouchMidpoint(touch1, touch2) {
+            return {
+                x: (touch1.clientX + touch2.clientX) / 2,
+                y: (touch1.clientY + touch2.clientY) / 2
+            };
+        }
 
         // Wheel for zoom
         imgElement.addEventListener('wheel', function (e) {
