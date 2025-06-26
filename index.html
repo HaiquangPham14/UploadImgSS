@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hiển thị ảnh</title>
     <style>
-        /* ...giữ nguyên phần CSS... */
         * {
             margin: 0;
             padding: 0;
@@ -187,11 +186,9 @@
             src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/ht22.png?alt=media"
             alt="Ảnh chèn giữa" />
         <div class="displayImage-wrapper" id="displayImageWrapper">
-            <!-- Ảnh nền background cố định (dùng làm khung tham chiếu kích thước) -->
             <img class="displayImage-bg" id="displayImageBg"
                 src="https://firebasestorage.googleapis.com/v0/b/demouploadvideo-40681.firebasestorage.app/o/22.png?alt=media"
                 alt="Nền khung" />
-            <!-- Ảnh URL sẽ phủ lên, lấy kích thước dựa theo ảnh nền phía dưới -->
             <img id="displayImage" alt="Ảnh từ URL" />
         </div>
         <p id="error"></p>
@@ -221,11 +218,9 @@
         const displayImageBg = document.getElementById('displayImageBg');
         const displayImageWrapper = document.getElementById('displayImageWrapper');
 
-        // Giữ kích thước thực tế của wrapper để vẽ Canvas
         let wrapperWidth = 0;
         let wrapperHeight = 0;
 
-        // Khi ảnh nền load xong, set lại kích thước wrapper (nếu muốn chuẩn pixel)
         displayImageBg.onload = function () {
             wrapperWidth = displayImageBg.clientWidth;
             wrapperHeight = displayImageBg.clientHeight;
@@ -235,7 +230,6 @@
             imgElement.style.height = "100%";
         };
 
-        // Nếu ảnh nền đã load sẵn (cache), vẫn phải set lại kích thước
         if (displayImageBg.complete) {
             displayImageBg.onload();
         }
@@ -248,7 +242,7 @@
             };
             imgElement.onload = () => {
                 errorElement.textContent = '';
-                imgElement.style.display = ""; // Hiện ảnh khi đổi ảnh
+                imgElement.style.display = "";
             };
         } else {
             errorElement.textContent = 'Vui lòng cung cấp URL ảnh qua query parameter (ví dụ: ?imageURL=https://example.com/image.jpg)';
@@ -256,10 +250,8 @@
 
         actionButton.addEventListener('click', async () => {
             if (clickCount === 0) {
-                // Lần nhấn đầu, tải về ảnh đã ghép
                 if (imageUrl) {
                     try {
-                        // Lấy URL của 2 ảnh
                         const bgUrl = displayImageBg.src;
                         const overUrl = imgElement.src;
 
@@ -268,7 +260,6 @@
                             loadImage(overUrl)
                         ]);
 
-                        // Lấy đúng kích thước gốc của displayImage-bg
                         const width = bgImg.naturalWidth;
                         const height = bgImg.naturalHeight;
 
@@ -277,13 +268,9 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
 
-                        // Vẽ ảnh nền
                         drawImageContain(ctx, bgImg, width, height, 16);
-
-                        // Vẽ ảnh phủ lên (giữ đúng tỉ lệ object-fit: contain)
                         drawImageContain(ctx, overImg, width, height, 16);
 
-                        // Tải về
                         canvas.toBlob(blob => {
                             const fileName = randomFileName();
                             const blobUrl = URL.createObjectURL(blob);
@@ -298,14 +285,13 @@
                             errorElement.textContent = `Ảnh đã được tải về thành công! (${fileName})`;
                             errorElement.style.color = '#4CAF50';
 
-                            // Ẩn ảnh sau 3 giây
                             setTimeout(() => {
                                 imgElement.style.display = 'none';
                                 errorElement.textContent = '';
                                 displayImageWrapper.style.display = 'none';
                             }, 1000);
 
-                            clickCount = 1; // Chuyển sang lần 2
+                            clickCount = 1;
                         }, 'image/jpeg', 0.93);
 
                     } catch (err) {
@@ -317,7 +303,6 @@
                     errorElement.style.color = 'red';
                 }
             } else {
-                // Lần nhấn thứ 2, cho chọn file
                 fileInput.click();
             }
         });
@@ -357,13 +342,9 @@
             clickCount = 0;
         });
 
-        // ---- HÀM HỖ TRỢ GHÉP ẢNH ----
-
-        // Hàm tải ảnh đảm bảo trả về Image đã load
         function loadImage(src) {
             return new Promise((resolve, reject) => {
                 const img = new window.Image();
-                // Bắt buộc phải set crossOrigin để tránh lỗi CORS khi ghép
                 img.crossOrigin = 'anonymous';
                 img.onload = () => resolve(img);
                 img.onerror = reject;
@@ -371,29 +352,24 @@
             });
         }
 
-        // Hàm vẽ ảnh với object-fit: contain, bo góc radius (radius px)
         function drawImageContain(ctx, img, width, height, radius = 0) {
-            // Tính toán tỉ lệ để fit contain
             const imgRatio = img.width / img.height;
             const boxRatio = width / height;
 
             let drawWidth, drawHeight, offsetX, offsetY;
 
             if (imgRatio > boxRatio) {
-                // Ảnh rộng hơn khung
                 drawWidth = width;
                 drawHeight = width / imgRatio;
                 offsetX = 0;
                 offsetY = (height - drawHeight) / 2;
             } else {
-                // Ảnh cao hơn khung
                 drawHeight = height;
                 drawWidth = height * imgRatio;
                 offsetX = (width - drawWidth) / 2;
                 offsetY = 0;
             }
 
-            // Vẽ viền bo góc nếu có
             if (radius > 0) {
                 ctx.save();
                 roundedRect(ctx, 0, 0, width, height, radius);
@@ -403,7 +379,6 @@
             if (radius > 0) ctx.restore();
         }
 
-        // Hàm vẽ bo góc cho canvas context
         function roundedRect(ctx, x, y, width, height, radius) {
             ctx.beginPath();
             ctx.moveTo(x + radius, y);
